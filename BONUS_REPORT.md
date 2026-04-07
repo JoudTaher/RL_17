@@ -36,6 +36,7 @@ env = Monitor(gym.make("Pyrace-v3"))
 model = PPO("MlpPolicy", env, verbose=1)
 model.learn(total_timesteps=200_000)
 model.save("models_PPO_v01/ppo_pyrace")
+```
 
 
 ## 3. Evaluation Results
@@ -72,4 +73,5 @@ Overall, combining improved reward design with a robust algorithm resulted in a 
 pip install stable-baselines3==2.3.2 shimmy==1.3.0
 python Pyrace_PPO.py --mode train  #to train
 python Pyrace_PPO.py --mode eval   # to evaluate
+```
 
