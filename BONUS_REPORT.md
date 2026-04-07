@@ -51,15 +51,40 @@ PPO uses a **clipped objective** to prevent the policy from changing too drastic
 
 ### Implementation
 
-`Pyrace_PPO.py` uses `stable_baselines3.PPO` with the same `Pyrace-v3` environment as the DQN agent, ensuring the reward signal is identical across both approaches.
+`Pyrace_PPO.py` wraps the `Pyrace-v3` environment with an `AdvancedRewardWrapper` that adds two extra shaping signals on top of the built-in shaped reward. This extra layer is applied only in the PPO pipeline — the DQN file is left completely unchanged.
+
+| Extra signal | Effect |
+|---|---|
+| Wall-proximity penalty | Each radar reading below 0.15 (normalised) adds a proportional penalty, discouraging tight wall-hugging |
+| Survival micro-bonus | +0.02 per step alive, reinforcing longer crash-free episodes |
 
 ```python
 from stable_baselines3 import PPO
 
-model = PPO("MlpPolicy", env, verbose=1)
+env = AdvancedRewardWrapper(gym.make("Pyrace-v3"))
+env = Monitor(env)
+
+model = PPO(
+    "MlpPolicy", env, verbose=1, seed=42,
+    n_steps=2048, batch_size=64, n_epochs=10,
+    gamma=0.99, gae_lambda=0.95,
+    learning_rate=3e-4, clip_range=0.2, ent_coef=0.01,
+)
 model.learn(total_timesteps=200_000)
 model.save("models_PPO_v01/ppo_pyrace")
 ```
+
+#### Evaluation metrics
+
+The evaluation loop distinguishes three distinct outcomes per episode:
+
+| Metric | Meaning |
+|---|---|
+| Crashes | Episode ended with a collision |
+| Goals (lap done) | `terminated=True` **and** `crash=False` — the car completed a full lap |
+| Non-crash episodes | Episodes that ended without a crash (includes timeouts) |
+
+This avoids the earlier pitfall of counting every non-crash episode as a "goal" when some episodes end due to a timeout rather than lap completion.
 
 ---
 
@@ -76,13 +101,13 @@ pip install stable-baselines3==2.3.2 shimmy==1.3.0
 ### Train
 
 ```bash
-python Pyrace_PPO.py --mode train --steps 200000
+python Pyrace_PPO.py --mode train --steps 200000 --seed 42
 ```
 
 ### Evaluate
 
 ```bash
-python Pyrace_PPO.py --mode eval --eval-episodes 20
+python Pyrace_PPO.py --mode eval --eval-episodes 20 --seed 42
 ```
 
 ---
@@ -93,5 +118,5 @@ python Pyrace_PPO.py --mode eval --eval-episodes 20
 |---|---|
 | Part 1 — DQN | Discrete-action agent trained from scratch with replay buffer and target network |
 | Part 2 — Reward | Switched to `Pyrace-v3` shaped reward: forward progress + checkpoints + crash penalty + time penalty |
-| Bonus — PPO | Same environment, more advanced algorithm via Stable-Baselines3; more stable training, extensible to continuous control |
+| Bonus — PPO | Same `Pyrace-v3` environment + `AdvancedRewardWrapper` (wall-proximity penalty, survival bonus); tuned PPO hyperparameters via Stable-Baselines3; reproducible via `--seed` |
 
